@@ -39,20 +39,21 @@ for (let i = 0; i < PETAL_COUNT; i++) {
   petalContainer.appendChild(p);
 }
 
-/* ── Floating hearts on page 2 ── */
+/* ── Floating hearts & flowers on page 2 ── */
 const floatingHeartsEl = $('floating-hearts');
-const FHEART_COUNT = 20;
+const floatSymbols = ['♥', '♥', '♥', '🌸', '🌷', '🌺', '🌸', '♥', '🌷', '♥'];
+const FHEART_COUNT = 28;
 for (let i = 0; i < FHEART_COUNT; i++) {
   const h = document.createElement('div');
   h.className = 'fheart';
-  h.textContent = '♥';
-  const size = rand(0.7, 1.8);
+  h.textContent = floatSymbols[i % floatSymbols.length];
+  const size = rand(0.75, 1.9);
   h.style.cssText = `
     left: ${rand(0, 100)}%;
     bottom: ${rand(-10, 10)}%;
     font-size: ${size}rem;
-    animation-duration: ${rand(7, 16)}s;
-    animation-delay: ${rand(0, 10)}s;
+    animation-duration: ${rand(7, 17)}s;
+    animation-delay: ${rand(0, 12)}s;
   `;
   floatingHeartsEl.appendChild(h);
 }
@@ -235,20 +236,89 @@ function launchBalloons(count = 10) {
 }
 
 /* ============================================================
-   MUSIC TOGGLE
+   MUSIC — Web Audio soft lullaby tone (works without a file)
    ============================================================ */
 const musicBtn  = $('music-btn');
 const bgMusic   = $('bg-music');
 let musicPlaying = false;
+let audioCtx = null;
+let gainNode = null;
+let oscillators = [];
+
+function buildAudioCtx() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  gainNode = audioCtx.createGain();
+  gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+  gainNode.connect(audioCtx.destination);
+}
+
+/* Soft pentatonic chord — gentle, warm, musical */
+const noteFreqs = [261.63, 329.63, 392.00, 523.25, 659.25]; // C4 E4 G4 C5 E5
+
+function startTones() {
+  buildAudioCtx();
+  /* Resume suspended context (required by browsers) */
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  oscillators.forEach(o => { try { o.stop(); } catch(e){} });
+  oscillators = [];
+
+  noteFreqs.forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const vol = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    /* Gentle volume per note */
+    vol.gain.value = [0.10, 0.07, 0.09, 0.07, 0.05][i];
+    /* Slight vibrato */
+    const lfo = audioCtx.createOscillator();
+    const lfoGain = audioCtx.createGain();
+    lfo.frequency.value = 4.5;
+    lfoGain.gain.value = 1.5;
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+    lfo.start();
+    osc.connect(vol);
+    vol.connect(gainNode);
+    osc.start();
+    oscillators.push(osc, lfo);
+  });
+
+  /* Fade in smoothly */
+  gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+  gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+  gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 1.5);
+}
+
+function stopTones() {
+  if (!gainNode) return;
+  gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+  gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+  gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.2);
+  setTimeout(() => {
+    oscillators.forEach(o => { try { o.stop(); } catch(e){} });
+    oscillators = [];
+  }, 1300);
+}
 
 musicBtn.addEventListener('click', e => {
   e.stopPropagation();
   if (musicPlaying) {
+    /* Try mp3 first, then Web Audio fallback */
     bgMusic.pause();
+    stopTones();
     musicBtn.classList.remove('playing');
     musicBtn.title = 'Play music';
   } else {
-    bgMusic.play().catch(() => {}); // silent fail if no file
+    /* Try real file; if it fails use synthesized tones */
+    const playPromise = bgMusic.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        /* No mp3 — use Web Audio soft chords */
+        startTones();
+      });
+    }
     musicBtn.classList.add('playing');
     musicBtn.title = 'Pause music';
   }
