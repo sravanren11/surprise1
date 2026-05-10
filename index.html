@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Happy Mother's Day ❤️</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Poppins:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ───────────────────────────────────────────
+       PAGE 1 — Shoot to Reveal
+  ─────────────────────────────────────────── -->
+  <section id="page1">
+
+    <!-- Custom crosshair cursor (desktop) -->
+    <div id="crosshair">
+      <div class="ch-line ch-h"></div>
+      <div class="ch-line ch-v"></div>
+      <div class="ch-ring"></div>
+    </div>
+
+    <!-- Ambient petals -->
+    <div id="petals"></div>
+
+    <!-- Instruction text -->
+    <p id="instruction">Shoot the heart to unlock your surprise&nbsp;❤️</p>
+
+    <!-- The target heart -->
+    <div id="heart-target">
+      <svg id="heart-svg" viewBox="0 0 100 90" xmlns="http://www.w3.org/2000/svg">
+        <path d="M50 85 C50 85 5 55 5 28 C5 12 17 2 30 2 C38 2 45 7 50 14 C55 7 62 2 70 2 C83 2 95 12 95 28 C95 55 50 85 50 85Z"/>
+      </svg>
+    </div>
+
+    <!-- Particle canvas (explosion) -->
+    <canvas id="particle-canvas"></canvas>
+
+    <!-- "Happy Mother's Day" reveal text -->
+    <div id="reveal-text">
+      <h1>Happy Mother's Day</h1>
+      <span class="reveal-heart">❤️</span>
+    </div>
+
+    <!-- Balloons container -->
+    <div id="balloons"></div>
+
+    <!-- Confetti canvas -->
+    <canvas id="confetti-canvas"></canvas>
+
+    <!-- Music toggle -->
+    <button id="music-btn" title="Toggle music" aria-label="Toggle background music">
+      <span id="music-icon">♪</span>
+    </button>
+    <!-- Placeholder audio — swap src for a real mp3 if desired -->
+    <audio id="bg-music" loop>
+      <source src="music.mp3" type="audio/mpeg" />
+    </audio>
+
+  </section>
+
+  <!-- ───────────────────────────────────────────
+       PAGE 2 — Photo + Personal Message
+  ─────────────────────────────────────────── -->
+  <section id="page2">
+
+    <!-- Floating hearts background -->
+    <div id="floating-hearts"></div>
+
+    <div class="page2-inner">
+
+      <!-- Photo card -->
+      <div class="photo-card" id="photo-card">
+        <!-- Replace mom.jpg with the real photo path -->
+        <img src="mom.jpg" alt="A photo of Mom" onerror="this.style.display='none'; document.getElementById('photo-placeholder').style.display='flex'" />
+        <div id="photo-placeholder">
+          <span>📷</span>
+          <p>Place <code>mom.jpg</code> here</p>
+        </div>
+      </div>
+
+      <!-- Message card -->
+      <div class="message-card" id="message-card">
+        <div class="gold-line"></div>
+        <p class="message-text">
+          Thank you for every sacrifice, every smile,<br/>
+          and every moment of love.<br/><br/>
+          You are my first teacher, my biggest supporter,<br/>
+          and my forever hero.<br/><br/>
+          <em>Love you, Amma ❤️</em>
+        </p>
+        <div class="gold-line"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <script src="script.js"></script>
+</body>
+</html>
