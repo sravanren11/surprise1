@@ -297,7 +297,7 @@ html, body {
 /* ── Photo card ── */
 .photo-card {
   width: 100%;
-  max-width: 380px;
+  max-width: 270px;
   border-radius: 22px;
   overflow: hidden;
   box-shadow:
