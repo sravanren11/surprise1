@@ -236,91 +236,156 @@ function launchBalloons(count = 10) {
 }
 
 /* ============================================================
-   MUSIC — Web Audio soft lullaby tone (works without a file)
+   MUSIC — Scheduled melody + harmony + bass, loops forever
    ============================================================ */
-const musicBtn  = $('music-btn');
-const bgMusic   = $('bg-music');
+const musicBtn = $('music-btn');
 let musicPlaying = false;
 let audioCtx = null;
-let gainNode = null;
-let oscillators = [];
+let masterGain = null;
+let melodyTimeout = null;
+let stopRequested = false;
 
-function buildAudioCtx() {
+/* Note frequencies (Hz) */
+const NOTE = {
+  C4:261.63, D4:293.66, E4:329.63, F4:349.23,
+  G4:392.00, A4:440.00, B4:493.88,
+  C5:523.25, D5:587.33, E5:659.25, F5:698.46,
+  G5:783.99, A5:880.00,
+  C3:130.81, G3:196.00, A3:220.00, F3:174.61, E3:164.81
+};
+
+/*  Gentle waltz-style melody — "Lullaby feel"
+    Each entry: [noteKey, durationSecs]          */
+const MELODY = [
+  ['E5',0.5],['D5',0.5],['C5',0.5],
+  ['E5',0.5],['G5',1.0],
+  ['A5',0.5],['G5',0.5],['F5',0.5],
+  ['E5',1.5],
+  ['D5',0.5],['E5',0.5],['F5',0.5],
+  ['G5',1.0],['E5',0.5],
+  ['F5',0.5],['E5',0.5],['D5',0.5],
+  ['C5',2.0],
+  ['G4',0.5],['A4',0.5],['B4',0.5],
+  ['C5',1.0],['E5',0.5],
+  ['D5',0.5],['C5',0.5],['B4',0.5],
+  ['A4',1.5],
+  ['F5',0.5],['E5',0.5],['D5',0.5],
+  ['E5',1.0],['C5',0.5],
+  ['D5',0.5],['C5',0.5],['B4',0.5],
+  ['C5',2.0],
+];
+
+/* Chord pads played in parallel (soft, long notes) */
+const CHORDS = [
+  {notes:['C4','E4','G4'], dur:4},
+  {notes:['A3','C4','E4'], dur:4},
+  {notes:['F3','A3','C4'], dur:4},
+  {notes:['G3','B4','D5'], dur:4},
+];
+
+/* Bass line, one note per chord slot */
+const BASS = ['C3','A3','F3','G3'];
+
+function initAudio() {
   if (audioCtx) return;
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  gainNode = audioCtx.createGain();
-  gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-  gainNode.connect(audioCtx.destination);
+  masterGain = audioCtx.createGain();
+  masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+  masterGain.connect(audioCtx.destination);
 }
 
-/* Soft pentatonic chord — gentle, warm, musical */
-const noteFreqs = [261.63, 329.63, 392.00, 523.25, 659.25]; // C4 E4 G4 C5 E5
+/* Play a single note: sine/triangle, with attack+release envelope */
+function playNote(freq, startTime, duration, volume, type = 'sine') {
+  const osc  = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, startTime);
+  /* Very slight detune for warmth */
+  osc.detune.setValueAtTime(rand(-4, 4), startTime);
 
-function startTones() {
-  buildAudioCtx();
-  /* Resume suspended context (required by browsers) */
+  const atk = Math.min(0.06, duration * 0.15);
+  const rel = Math.min(0.3, duration * 0.4);
+  gain.gain.setValueAtTime(0, startTime);
+  gain.gain.linearRampToValueAtTime(volume, startTime + atk);
+  gain.gain.setValueAtTime(volume, startTime + duration - rel);
+  gain.gain.linearRampToValueAtTime(0, startTime + duration);
+
+  osc.connect(gain);
+  gain.connect(masterGain);
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.05);
+}
+
+/* Schedule one full pass of melody + chords + bass */
+function scheduleSong(startTime) {
+  /* ── Melody ── */
+  let t = startTime;
+  for (const [key, dur] of MELODY) {
+    if (NOTE[key]) playNote(NOTE[key], t, dur * 0.92, 0.22, 'sine');
+    t += dur;
+  }
+  const songDuration = t - startTime;
+
+  /* ── Chord pads (loop to fill song length) ── */
+  let ct = startTime;
+  let ci = 0;
+  while (ct < startTime + songDuration) {
+    const chord = CHORDS[ci % CHORDS.length];
+    chord.notes.forEach(n => {
+      if (NOTE[n]) playNote(NOTE[n], ct, chord.dur, 0.07, 'triangle');
+    });
+    /* Bass */
+    const bassNote = BASS[ci % BASS.length];
+    if (NOTE[bassNote]) playNote(NOTE[bassNote], ct, chord.dur * 0.6, 0.12, 'sine');
+    ct += chord.dur;
+    ci++;
+  }
+
+  return songDuration;
+}
+
+function startMusic() {
+  initAudio();
   if (audioCtx.state === 'suspended') audioCtx.resume();
+  stopRequested = false;
 
-  oscillators.forEach(o => { try { o.stop(); } catch(e){} });
-  oscillators = [];
+  /* Fade master in */
+  masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+  masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+  masterGain.gain.linearRampToValueAtTime(0.9, audioCtx.currentTime + 1.8);
 
-  noteFreqs.forEach((freq, i) => {
-    const osc = audioCtx.createOscillator();
-    const vol = audioCtx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = freq;
-    /* Gentle volume per note */
-    vol.gain.value = [0.10, 0.07, 0.09, 0.07, 0.05][i];
-    /* Slight vibrato */
-    const lfo = audioCtx.createOscillator();
-    const lfoGain = audioCtx.createGain();
-    lfo.frequency.value = 4.5;
-    lfoGain.gain.value = 1.5;
-    lfo.connect(lfoGain);
-    lfoGain.connect(osc.frequency);
-    lfo.start();
-    osc.connect(vol);
-    vol.connect(gainNode);
-    osc.start();
-    oscillators.push(osc, lfo);
-  });
-
-  /* Fade in smoothly */
-  gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
-  gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-  gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 1.5);
+  /* Schedule first pass, then loop */
+  function loop(startTime) {
+    if (stopRequested) return;
+    const dur = scheduleSong(startTime);
+    /* Schedule next loop 0.05s before this one ends for seamless repeat */
+    const delay = Math.max(0, (startTime + dur - audioCtx.currentTime - 0.05) * 1000);
+    melodyTimeout = setTimeout(() => loop(startTime + dur), delay);
+  }
+  loop(audioCtx.currentTime + 0.1);
 }
 
-function stopTones() {
-  if (!gainNode) return;
-  gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
-  gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
-  gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.2);
-  setTimeout(() => {
-    oscillators.forEach(o => { try { o.stop(); } catch(e){} });
-    oscillators = [];
-  }, 1300);
+function stopMusic() {
+  stopRequested = true;
+  clearTimeout(melodyTimeout);
+  if (!masterGain) return;
+  masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+  masterGain.gain.setValueAtTime(masterGain.gain.value, audioCtx.currentTime);
+  masterGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.5);
 }
 
 musicBtn.addEventListener('click', e => {
   e.stopPropagation();
   if (musicPlaying) {
-    /* Try mp3 first, then Web Audio fallback */
-    bgMusic.pause();
-    stopTones();
+    stopMusic();
     musicBtn.classList.remove('playing');
     musicBtn.title = 'Play music';
+    $('music-icon').textContent = '♪';
   } else {
-    /* Try real file; if it fails use synthesized tones */
-    const playPromise = bgMusic.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        /* No mp3 — use Web Audio soft chords */
-        startTones();
-      });
-    }
+    startMusic();
     musicBtn.classList.add('playing');
     musicBtn.title = 'Pause music';
+    $('music-icon').textContent = '♬';
   }
   musicPlaying = !musicPlaying;
 });
